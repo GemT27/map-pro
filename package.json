@@ -1,0 +1,30 @@
+{
+  "name": "map-pro",
+  "private": false,
+  "version": "1.0.1",
+  "description": "parse it into a beautiful echarts map",
+  "keywords": ["echarts", "map", "geo"],
+  "main": "./dist/mapPro.umd.js",
+  "module": "./dist/mapPro.es.js",
+  "typings": "types/main.d.ts",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "files": [
+    "dist",
+    "types"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GemT27/map-pro.git"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.2",
+    "vite": "^4.3.2"
+  },
+  "dependencies": {
+    "echarts": "^5.4.2"
+  }
+}

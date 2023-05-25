@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>mapPro</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        #map {
+            width: 100vw;
+            height: 100vh;
+        }
+        .back {
+            position: absolute;
+            right: 50px;
+            top: 50px;
+            font-size: 13px;
+            z-index: 1;
+            cursor: pointer;
+            color: white;
+            background: linear-gradient(to right, #40c0ef, #0b579a);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 5px 5px 5px 5px;
+            box-shadow: 0 3px 6px 0 #000000;
+            width: 114px;
+            height: 32px;
+        }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+<div class="back">返回北京市</div>
+<script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.2/echarts.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+<script src="../dist/mapPro.umd.js"></script>
+<script src="lottie.js"></script>
+<script src="star.js"></script>
+<script>
+    lottieParser.install(echarts)
+
+    const dom = document.getElementById("map");
+    const areaConf = {};
+    let choose = "北京市";
+    let allCity = [];
+    const cityCoords = {}
+    const defaultZoom = 1.15;
+    const chart = echarts.init(dom);
+
+    function batchRegisterMap(dom, json) {
+        const createMap = (border, full, name) => {
+            const cfg = {
+                echarts,
+                width: dom.offsetWidth,
+                height: dom.offsetHeight,
+                geoJson: {
+                    border,
+                    full,
+                    mapName: name,
+                },
+                cityCoords,
+                animate: {
+                    show: true,
+                    constantSpeed: 150,
+                    trailLength: 0.8,
+                    symbolSize: 4,
+                    delay: 500,
+                    color: "rgba(255,255,255,0.8)",
+                },
+            };
+            const {mapSvg, shapesList, geoUtils, cityList} = mapPro(cfg);
+            areaConf[name] = {
+                shapesList,
+                geoUtils,
+                cityList,
+            };
+            echarts.registerMap(name, {
+                svg: mapSvg,
+            });
+        };
+        createMap(json["北京市"], json["北京市(子区域)"], "北京市");
+
+        new Promise((resolve) => {
+            setTimeout(() => {
+                const areaKeys = Object.keys(json).filter(
+                    (item) => item !== "北京市" && item !== "北京市(子区域)"
+                );
+                areaKeys.forEach((area) => {
+                    let border = json["北京市(子区域)"].features.find(
+                        (item) => item.properties.name === area
+                    );
+                    border = {
+                        type: "FeatureCollection",
+                        features: [border],
+                    };
+                    const full = json[area];
+                    createMap(border, full, area);
+                });
+                resolve("register ok");
+            }, 100);
+        });
+    }
+
+    function switchMap(name) {
+        if (!allCity.includes(name)) {
+            return;
+        }
+        choose = name;
+        option.geo[0].map = name;
+        option.geo[0].zoom = defaultZoom;
+        option.geo[0].center = null;
+        const {shapesList, cityList, geoUtils} = areaConf[name];
+        option.series[1] = shapesList.cityTextShape();
+        const animateLinesShape = shapesList.animateLinesShape();
+        let starIndex = 3
+        for (let i = 0; i < animateLinesShape.length; i++) {
+            option.series[2 + i] = animateLinesShape[i];
+            starIndex+=i
+        }
+        const cityData = [];
+        const cityStar = []
+        cityList.forEach((city) => {
+            cityData.push({
+                name: city,
+                value: Math.random() * 100,
+            });
+            const coords = cityCoords[city]
+            const convertPoint = geoUtils.dataToPoint(coords)
+            cityStar.push([convertPoint[0], convertPoint[1] - 10])
+        });
+
+        // option.series[0].data = cityData;
+
+        option.series[starIndex]  = {
+                id: 'star',
+                type: 'custom',
+                name: 'star',
+                coordinateSystem: 'geo',
+                geoIndex: 0,
+                zlevel: 1,
+                data: cityStar,
+                animation: true,
+                renderItem: renderStar
+        }
+
+        chart.clear();
+        chart.setOption(option);
+    }
+
+    function showProvince() {
+        switchMap("北京市");
+        const backBtn = document.querySelector(".back")
+        backBtn.style.display = "none"
+    }
+
+    function renderStar (params, api) {
+        const coords = api.coord([
+            api.value(0),
+            api.value(1)
+        ])
+        const zoom = params.coordSys.zoom
+        const height = 200
+        const width = 200
+        let scaleRate = 25
+        if (zoom > 1) {
+            scaleRate = scaleRate + (zoom * 5)
+        } else if (zoom < 1) {
+            scaleRate = scaleRate - ((1 - zoom) * 10)
+        }
+        const scale = scaleRate / Math.min(width, height)
+        return {
+            type: 'group',
+            x: coords[0] - scaleRate / 2,
+            y: coords[1] - scaleRate / 2,
+            children: [
+                {
+                    type: 'group',
+                    scaleX: scale,
+                    scaleY: scale,
+                    children: starGroup
+                }
+            ]
+        }
+    }
+
+    const option = {
+        backgroundColor: 'rgb(0,0,0)',
+        visualMap: [
+            {
+                text: ["", ""],
+                textStyle: {
+                    color: "#BDEFF3",
+                    fontWeight: "bold",
+                },
+                min: 0,
+                max: 100,
+                // range: [0, 400],
+                bottom: "52%",
+                left: 10,
+                realtime: false,
+                // precision: 2,
+                calculable: true,
+                inRange: {
+                    color: ["rgba(0,180,220,0.5)", "rgba(0,74,207,0.5)"],
+                },
+                seriesIndex: 0,
+            },
+        ],
+        geo: [],
+        series: [],
+    };
+
+
+
+    fetch("bj.json").then(res => res.json()).then(res => {
+        allCity = Object.keys(res);
+        allCity.forEach(key => {
+            const features = res[key].features
+            features.forEach(feat => {
+                cityCoords[feat.properties.name] = turf.center(feat).geometry.coordinates
+            })
+        })
+        batchRegisterMap(dom, res);
+
+        option.geo.push({
+            map: "北京市",
+            roam: true,
+            zoom: defaultZoom,
+            label: {
+                show: false,
+                color: "#000a3c",
+            },
+            scaleLimit: {
+                min: 0.3,
+                max: 8,
+            },
+            width: dom.offsetWidth,
+            height: dom.offsetHeight,
+            itemStyle: {
+                // areaColor: 'rgba(8,170,210,0.13)',
+                borderWidth: 2,
+                borderColor: "rgba(255,255,255,0.8)",
+                shadowColor: "rgb(0,160,255)",
+                shadowBlur: 5,
+                shadowOffsetY: 2,
+            },
+            emphasis: {
+                label: {
+                    show: false,
+                },
+                itemStyle: {
+                    areaColor: "rgba(8,170,210,0.73)",
+                },
+            },
+            select: {
+                disabled: true,
+            },
+        });
+        option.series.push({
+            name: "geoMap",
+            id: "geoMap",
+            geoIndex: 0,
+            type: "map",
+            map: "北京市",
+            selectedMode: false,
+            data: [],
+        });
+
+        showProvince();
+
+        const backBtn = document.querySelector(".back")
+        backBtn.style.display = "none"
+        backBtn.addEventListener("click", showProvince)
+
+        chart.on("click", (p) => {
+            const name = p.name;
+            if (name !== "北京市") {
+                backBtn.style.display = "flex"
+            }
+            chart.dispatchAction({
+                type: "downplay",
+                seriesIndex: 0,
+                dataIndex: p.dataIndex,
+            });
+            switchMap(name);
+        });
+    })
+</script>
+</body>
+</html>
